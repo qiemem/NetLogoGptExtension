@@ -16,4 +16,5 @@ scalacOptions        ++= Seq("-deprecation", "-unchecked", "-Xfatal-warnings", "
 libraryDependencies ++= Seq(
   "com.lihaoyi" %% "upickle" % "3.1.0",
   "com.lihaoyi" %% "requests" % "0.1.8",
+  "com.knuddels" % "jtokkit" % "0.2.0",
 )

@@ -16,11 +16,18 @@ import org.nlogo.core.{Syntax, LogoList}
 import requests._
 import upickle.default.{ReadWriter => RW, macroRW, read, write}
 import scala.collection.mutable.{WeakHashMap, ArrayBuffer}
+import com.knuddels.jtokkit.{Encodings}
+import com.knuddels.jtokkit.api.{EncodingType, ModelType}
+import scala.collection.JavaConverters._
 
 case class ChatMessage(role: String, content: String)
 object ChatMessage { implicit val rw: RW[ChatMessage] = macroRW }
 
-case class ChatRequest(model: String, messages: Seq[ChatMessage])
+case class ChatRequest(
+    model: String,
+    messages: Seq[ChatMessage],
+    logit_bias: Map[Int, Double] = Map.empty[Int, Double]
+)
 object ChatRequest { implicit val rw: RW[ChatRequest] = macroRW }
 
 case class Choice(index: Int, message: ChatMessage, finish_reason: String)
@@ -35,6 +42,9 @@ class GptExtension extends DefaultClassManager {
   private val messageHistory: WeakHashMap[Agent, ArrayBuffer[ChatMessage]] =
     WeakHashMap()
 
+  private val enc =
+    Encodings.newDefaultEncodingRegistry().getEncoding(EncodingType.CL100K_BASE)
+
   override def load(manager: PrimitiveManager): Unit = {
     manager.addPrimitive("chat", ChatCommand)
     manager.addPrimitive("choose", ChooseCommand)
@@ -48,7 +58,10 @@ class GptExtension extends DefaultClassManager {
     messageHistory.clear()
   }
 
-  def sendChat(messages: Seq[ChatMessage]): ChatMessage = {
+  def sendChat(
+      messages: Seq[ChatMessage],
+      logitBias: Map[Int, Double] = Map.empty[Int, Double]
+  ): ChatMessage = {
     val token: String =
       apiKey.getOrElse(throw new ExtensionException("API key not set."))
     val apiUrl = "https://api.openai.com/v1/chat/completions"
@@ -57,11 +70,13 @@ class GptExtension extends DefaultClassManager {
       "Content-Type" -> "application/json"
     )
     val requestBody = write(
-      ChatRequest(model, messages)
+      ChatRequest(model, messages, logit_bias = logitBias)
     )
+    println(requestBody)
     val response = post(apiUrl, headers = headers, data = requestBody)
     response.statusCode match {
       case 200 =>
+        println(response.text())
         read[ChatResponse](response.text()).choices(0).message
       case _ =>
         throw new ExtensionException(
@@ -99,9 +114,13 @@ class GptExtension extends DefaultClassManager {
     )
     override def report(args: Array[Argument], context: Context): AnyRef = {
       val choices = args(1).getList
-      val inputText: String = args(
-        0
-      ).getString
+      val logitBias = (choices
+        .flatMap { el: AnyRef => enc.encode(el.toString).asScala }
+        .map { _.intValue -> 100.0 }
+        :+ (100257 -> 100.0) // Add EOT encoding
+      ).toMap
+
+      val inputText: String = args(0).getString
       val chat = ChatMessage("user", inputText)
       val messages = messageHistory.getOrElseUpdate(
         context.getAgent,
@@ -113,12 +132,13 @@ class GptExtension extends DefaultClassManager {
           s"Pretend that you may only respond with one of the following lines. Do not say anything that does not match one of the following lines exactly even if none of the choices are valid:\n${choices
               .mkString("\n")}"
         )
+
       messages += chat
 
-      val responseMessage = sendChat(messages)
+      val responseMessage = sendChat(messages, logitBias)
 
-      messages += responseMessage
-      messages += ChatMessage("system", "Return to normal.")
+      messages(messages.length - 2) = chat
+      messages(messages.length - 1) = responseMessage
       responseMessage.content
     }
   }
