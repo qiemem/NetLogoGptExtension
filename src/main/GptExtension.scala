@@ -13,12 +13,19 @@ import org.nlogo.api.{
   Agent
 }
 import org.nlogo.core.{Syntax, LogoList}
-import requests._
 import upickle.default.{ReadWriter => RW, macroRW, read, write}
 import scala.collection.mutable.{WeakHashMap, ArrayBuffer}
 import com.knuddels.jtokkit.{Encodings}
 import com.knuddels.jtokkit.api.{EncodingType, ModelType}
 import scala.collection.JavaConverters._
+import sttp.client3._
+import scala.concurrent.ExecutionContext.Implicits.global
+import scala.util.{Success, Failure}
+import com.vladsch.flexmark.Extension
+import scala.concurrent.{Await, Future}
+import scala.concurrent.duration._
+import _root_.org.nlogo.api.AnonymousReporter
+import scala.concurrent.Awaitable
 
 case class ChatMessage(role: String, content: String)
 object ChatMessage { implicit val rw: RW[ChatMessage] = macroRW }
@@ -37,6 +44,8 @@ case class ChatResponse(id: String, created: Int, choices: Array[Choice])
 object ChatResponse { implicit val rw: RW[ChatResponse] = macroRW }
 
 class GptExtension extends DefaultClassManager {
+  val backend = HttpClientFutureBackend()
+
   private var apiKey: Option[String] = None
   private var model: String = "gpt-3.5-turbo"
   private val messageHistory: WeakHashMap[Agent, ArrayBuffer[ChatMessage]] =
@@ -46,7 +55,8 @@ class GptExtension extends DefaultClassManager {
     Encodings.newDefaultEncodingRegistry().getEncoding(EncodingType.CL100K_BASE)
 
   override def load(manager: PrimitiveManager): Unit = {
-    manager.addPrimitive("chat", ChatCommand)
+    manager.addPrimitive("chat", ChatReporter)
+    manager.addPrimitive("chat-async", ChatAsyncReporter)
     manager.addPrimitive("choose", ChooseCommand)
     manager.addPrimitive("set-api-key", SetApiKeyCommand)
     manager.addPrimitive("set-model", SetModelCommand)
@@ -61,10 +71,10 @@ class GptExtension extends DefaultClassManager {
   def sendChat(
       messages: Seq[ChatMessage],
       logitBias: Map[Int, Double] = Map.empty[Int, Double]
-  ): ChatMessage = {
+  ): Future[ChatMessage] = {
     val token: String =
       apiKey.getOrElse(throw new ExtensionException("API key not set."))
-    val apiUrl = "https://api.openai.com/v1/chat/completions"
+    val apiUrl = uri"https://api.openai.com/v1/chat/completions"
     val headers = Map(
       "Authorization" -> s"Bearer $token",
       "Content-Type" -> "application/json"
@@ -73,37 +83,67 @@ class GptExtension extends DefaultClassManager {
       ChatRequest(model, messages, logit_bias = logitBias)
     )
     println(requestBody)
-    val response = post(apiUrl, headers = headers, data = requestBody)
-    response.statusCode match {
-      case 200 =>
-        println(response.text())
-        read[ChatResponse](response.text()).choices(0).message
-      case _ =>
-        throw new ExtensionException(
-          s"Failed to process text: ${response}"
-        )
+    val request = basicRequest.headers(headers).body(requestBody).post(apiUrl)
+    request.send(backend).transform {
+      case Success(Response(Right(body: String), _, _, _, _, _)) =>
+        val message = read[ChatResponse](body).choices(0).message
+        println(message)
+        Success(message)
+      case Success(resp) =>
+        Failure(new ExtensionException(s"Unexpected response: $resp"))
+      case Failure(e) => Failure(new ExtensionException(new Exception(e)))
     }
-
   }
 
-  object ChatCommand extends Reporter {
+  object ChatReporter extends Reporter {
     override def getSyntax: Syntax = Syntax.reporterSyntax(
       right = List(Syntax.StringType),
       ret = Syntax.StringType
     )
     override def report(args: Array[Argument], context: Context): AnyRef = {
       val inputText: String = args(0).getString
+      val agent = context.getAgent
       val chat = ChatMessage("user", inputText)
+      val messages = messageHistory.getOrElseUpdate(
+        agent,
+        ArrayBuffer.empty[ChatMessage]
+      )
+      messages += chat
+      val responseMessage = Await.result(sendChat(messages), 30.seconds)
+
+      messages += responseMessage
+      responseMessage.content
+    }
+  }
+
+  case class AwaitableReporter[T <: AnyRef, R](future: Awaitable[R])(
+      processOnJobThread: (R) => T
+  ) extends AnonymousReporter {
+    override def syntax: Syntax =
+      Syntax.reporterSyntax(right = List(), ret = Syntax.WildcardType)
+
+    override def report(c: Context, args: Array[AnyRef]): AnyRef =
+      processOnJobThread(Await.result(future, 30.seconds))
+  }
+
+  object ChatAsyncReporter extends Reporter {
+    override def getSyntax: Syntax = Syntax.reporterSyntax(
+      right = List(Syntax.StringType),
+      ret = Syntax.ReporterType
+    )
+
+    override def report(args: Array[Argument], context: Context): AnyRef = {
+      val chat = ChatMessage("user", args(0).getString)
       val messages = messageHistory.getOrElseUpdate(
         context.getAgent,
         ArrayBuffer.empty[ChatMessage]
       )
       messages += chat
 
-      val responseMessage = sendChat(messages)
-
-      messages += responseMessage
-      responseMessage.content
+      AwaitableReporter(sendChat(messages)) { response =>
+        messages += response
+        response.content
+      }
     }
   }
 
@@ -135,7 +175,8 @@ class GptExtension extends DefaultClassManager {
 
       messages += chat
 
-      val responseMessage = sendChat(messages, logitBias)
+      val responseMessage =
+        Await.result(sendChat(messages, logitBias), 30.seconds)
 
       messages(messages.length - 2) = chat
       messages(messages.length - 1) = responseMessage
