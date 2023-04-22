@@ -3,3 +3,4 @@ resolvers ++= Seq(
 )
 
 addSbtPlugin("org.nlogo" % "netlogo-extension-plugin" % "6.1.0")
+addSbtPlugin("ch.epfl.scala" % "sbt-scalafix" % "0.10.4")

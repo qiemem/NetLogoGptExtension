@@ -1,31 +1,21 @@
 package org.nlogo.extensions.gpt
 
 
-import org.nlogo.api.{
-  Argument,
-  Context,
-  DefaultClassManager,
-  ExtensionException,
-  ExtensionManager,
-  PrimitiveManager,
-  Reporter,
-  Command,
-  Agent
-}
-import org.nlogo.core.{Syntax, LogoList}
-import upickle.default.{ReadWriter => RW, macroRW, read, write}
-import scala.collection.mutable.{WeakHashMap, ArrayBuffer}
-import com.knuddels.jtokkit.{Encodings}
-import com.knuddels.jtokkit.api.{EncodingType, ModelType}
-import scala.collection.JavaConverters._
-import sttp.client3._
-import scala.concurrent.ExecutionContext.Implicits.global
-import scala.util.{Success, Failure}
-import com.vladsch.flexmark.Extension
-import scala.concurrent.{Await, Future}
-import scala.concurrent.duration._
 import _root_.org.nlogo.api.AnonymousReporter
-import scala.concurrent.Awaitable
+import com.knuddels.jtokkit.Encodings
+import com.knuddels.jtokkit.api.{EncodingType, ModelType}
+import com.vladsch.flexmark.Extension
+import org.nlogo.api.{Agent, Argument, Command, Context, DefaultClassManager, ExtensionException, ExtensionManager, PrimitiveManager, Reporter}
+import org.nlogo.core.{LogoList, Syntax}
+import sttp.client3._
+import upickle.default.{ReadWriter => RW, macroRW, read, write}
+
+import scala.collection.JavaConverters._
+import scala.collection.mutable.{ArrayBuffer, WeakHashMap}
+import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.duration._
+import scala.concurrent.{Await, Awaitable, Future}
+import scala.util.{Failure, Success}
 
 case class ChatMessage(role: String, content: String)
 object ChatMessage { implicit val rw: RW[ChatMessage] = macroRW }

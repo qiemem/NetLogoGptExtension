@@ -18,3 +18,5 @@ libraryDependencies ++= Seq(
   "com.knuddels" % "jtokkit" % "0.2.0",
   "com.softwaremill.sttp.client3" %% "core" % "3.8.15",
 )
+
+ThisBuild / scalafixDependencies += "com.github.liancheng" %% "organize-imports" % "0.6.0"
