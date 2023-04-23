@@ -29,7 +29,7 @@ to setup
     "Yvette" "Zack"]
 ;  let names [ "Gracy" "Myo" "Jasmin" "Wilder" "Osha" "Rik" "Wane" "Ben""Roky" "David" ]
   set colors ["red" "blue" "green"]
-  cro 6 [
+  cro num-agents [
 ;    rt 15
     fd 10
     set size 2
@@ -58,25 +58,34 @@ to go
       messages
 ;      "What do you know about the other agents in the network?"
       " What would you like to say to your neighbors?"
-      " Your response must be a raw json object with the keys `message` and `knowledge`,"
-      " where `message` is what you want to say to your neighbors"
-      " and `knowledge` is another json object with agent names as keys and their favorite colors as values or \"unknown\" if you have not yet learned their favorite color."
+      " Your response must be a raw json object with the keys `message`, `knowledge`, and network."
+      " `message` is what you want to say to your neighbors"
+      " `knowledge` is an object with agent names as keys and their favorite colors as values or \"unknown\" if you have not yet learned their favorite color."
+      " `network` is an object with agent names as keys and a array of agent names as values indicating which agents are directly connected to which other agents."
       " Your response should not include any formatting."
     )
   ]
   ask facts [ die ]
   ask turtles [
-    let res table:from-json runresult response-reporter
-    set message table:get res "message"
-    foreach table:to-list table:get res "knowledge" [ pair ->
-      create-facts-to other turtles with [ name = first pair ] [
-        if member? last pair colors [
-          set color runresult last pair
+    let raw runresult response-reporter
+    carefully [
+      let res table:from-json raw
+      set message table:get res "message"
+      foreach table:to-list table:get res "knowledge" [ pair ->
+        create-facts-to other turtles with [ name = first pair ] [
+          if member? last pair colors [
+            set color runresult last pair
+          ]
         ]
       ]
+      set label word-wrap (word name ": " message) 30
+      set last-message message
+    ] [
+      show error-message
+      show raw
+      set message ""
+      set last-message message
     ]
-    set label word-wrap (word name ": " message) 30
-    set last-message message
   ]
   tick
 end
@@ -151,10 +160,10 @@ ticks
 30.0
 
 BUTTON
-24
-21
-97
-54
+5
+45
+78
+78
 NIL
 setup
 NIL
@@ -168,10 +177,10 @@ NIL
 1
 
 BUTTON
-137
-25
-200
-58
+110
+45
+175
+78
 NIL
 go
 NIL
@@ -185,15 +194,30 @@ NIL
 1
 
 INPUTBOX
-4
-65
-385
-479
+0
+118
+381
+532
 prompt
 Pretend you are an agent in a social network connected to other agents.\nEvery message you say will be sent to your neighbors and you will receive every message they say.\nYour name is {name} .\nYour favorite color is {favorite-color} .\nYour neighbors are {reduce [[s w] -> (word s \", \" w)] [name] of link-neighbors} .\nYou are trying to figure out the names of your neighbors, the names of those in the network you who are not your neighbors, and the favorite color of all other agents in the network.\nAs you learn about new agents, try to find out their favorite color from your neighbors.\nYour responses must be exactly one short sentence and should clearly state who you are talking to.
 1
 1
 String
+
+SLIDER
+5
+10
+175
+43
+num-agents
+num-agents
+1
+26
+18.0
+1
+1
+NIL
+HORIZONTAL
 
 @#$#@#$#@
 ## WHAT IS IT?
@@ -565,5 +589,5 @@ true
 Line -7500403 true 150 150 90 180
 Line -7500403 true 150 150 210 180
 @#$#@#$#@
-0
+1
 @#$#@#$#@
