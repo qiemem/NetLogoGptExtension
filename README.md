@@ -23,6 +23,8 @@ end
 
 If you don't have an OpenAI API, you can create a new one here: https://platform.openai.com/account/api-keys
 
+To get the demo models working, you *must* put a file named `apikey` in the same directory as the model which has a single line containing your API key.
+
 ## Primitives
 
 ### `gpt:set-api-key <string>`

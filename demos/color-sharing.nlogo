@@ -61,7 +61,7 @@ to go
       " Your response must be a raw json object with the keys `message`, `knowledge`, and network."
       " `message` is what you want to say to your neighbors"
       " `knowledge` is an object with agent names as keys and their favorite colors as values or \"unknown\" if you have not yet learned their favorite color."
-      " `network` is an object with agent names as keys and a array of agent names as values indicating which agents are directly connected to which other agents."
+;      " `network` is an object with agent names as keys and a array of agent names as values indicating which agents are directly connected to which other agents."
       " Your response should not include any formatting."
     )
   ]
@@ -213,7 +213,7 @@ num-agents
 num-agents
 1
 26
-18.0
+6.0
 1
 1
 NIL

@@ -1,3 +1,5 @@
+import sbt.nio.file.FileTreeView
+
 enablePlugins(org.nlogo.build.NetLogoExtension)
 
 name := "Gpt-Extension"
@@ -7,6 +9,10 @@ isSnapshot := true
 netLogoExtName      := "gpt"
 netLogoClassManager := "org.nlogo.extensions.gpt.GptExtension"
 netLogoVersion      := "6.3.0"
+netLogoShortDescription := "Let agents communicate and make decisions using GPT-3.5 or GPT-4"
+netLogoLongDescription := ""
+netLogoHomepage := "https://github.com/qiemem/NetLogoGptExtension"
+netLogoZipExtras := FileTreeView.default.list((baseDirectory.value / "demos").toGlob / "*.nlogo").map(_._1.toFile)
 
 scalaVersion          := "2.12.17"
 Compile / scalaSource := baseDirectory.value / "src" / "main"
